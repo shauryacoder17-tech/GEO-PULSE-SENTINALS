@@ -16,6 +16,11 @@ import {
   CloudLightning,
   MapPin,
   Users,
+frontend
+  Download,
+  Activity,
+
+ main
 } from 'lucide-react'
 import type { Country } from '@/lib/dashboard-data'
 import { riskLevelConfig } from '@/lib/dashboard-data'
@@ -48,6 +53,30 @@ export default function CountryPanel({ country, onClose }: CountryPanelProps) {
     <aside className="w-72 shrink-0 bg-sentinel-surface border-l border-border flex flex-col overflow-hidden">
       {/* Panel Header */}
       <div className="h-10 flex items-center justify-between px-3 border-b border-border shrink-0">
+ frontend
+        <div className="flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5 text-sentinel-cyan animate-pulse" />
+          <span className="text-[10px] font-mono text-sentinel-cyan tracking-[0.2em]">INTEL REPORT</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-sentinel-cyan bg-transparent hover:bg-sentinel-surface-2 rounded transition-all"
+            aria-label="Export report"
+            title="Export Intel Data"
+            onClick={() => console.log('Exporting data...')}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-3 bg-border mx-1" />
+          <button
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-sentinel-red bg-transparent hover:bg-sentinel-red/10 rounded transition-all"
+            aria-label="Close panel"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <span className="text-[10px] font-mono text-sentinel-cyan tracking-[0.2em]">INTEL REPORT</span>
         <button
           onClick={onClose}
@@ -268,6 +297,23 @@ function IndicatorCard({ icon, label, value, color }: { icon: React.ReactNode; l
 }
 
 function RiskTrendChart({ data, color }: { data: number[]; color: string }) {
+ frontend
+  const { points, min, range, height, width } = useMemo(() => {
+    const maxVal = Math.max(...data)
+    const minVal = Math.min(...data)
+    const rangeVal = maxVal - minVal || 1
+    const h = 50
+    const w = 200
+
+    const pts = data.map((val, i) => {
+      const x = (i / (data.length - 1)) * w
+      const y = h - ((val - minVal) / rangeVal) * h
+      return `${x},${y}`
+    }).join(' ')
+
+    return { points: pts, min: minVal, range: rangeVal, height: h, width: w }
+  }, [data])
+
   const max = Math.max(...data)
   const min = Math.min(...data)
   const range = max - min || 1
@@ -279,6 +325,7 @@ function RiskTrendChart({ data, color }: { data: number[]; color: string }) {
     const y = height - ((val - min) / range) * height
     return `${x},${y}`
   }).join(' ')
+ main
 
   return (
     <div className="relative">

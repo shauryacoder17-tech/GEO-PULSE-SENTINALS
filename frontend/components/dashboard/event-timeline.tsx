@@ -9,9 +9,11 @@ import {
   TrendingUp,
   ChevronLeft,
   ChevronRight,
+  Newspaper
 } from 'lucide-react'
-import { globalEvents, eventTypeConfig, severityConfig } from '@/lib/dashboard-data'
-import type { GlobalEvent } from '@/lib/dashboard-data'
+import { motion, AnimatePresence } from 'framer-motion'
+import { eventTypeConfig, severityConfig } from '@/lib/dashboard-data'
+import { fetchLiveNews } from '@/lib/api'
 
 const eventIcons: Record<string, React.ReactNode> = {
   earthquake: <Activity className="w-3.5 h-3.5" />,
@@ -19,7 +21,11 @@ const eventIcons: Record<string, React.ReactNode> = {
   storm: <CloudLightning className="w-3.5 h-3.5" />,
   conflict: <Crosshair className="w-3.5 h-3.5" />,
   market: <TrendingUp className="w-3.5 h-3.5" />,
+  news: <Newspaper className="w-3.5 h-3.5" />
 }
+
+const typeConfSafe = (type: string) => eventTypeConfig[type] || { color: '#888', label: type.toUpperCase() };
+const sevConfSafe = (sev: string) => severityConfig[sev] || { color: '#888', bg: 'rgba(136,136,136,0.15)' };
 
 const formatTimestamp = (ts: string) => {
   const d = new Date(ts)
@@ -36,6 +42,27 @@ export default function EventTimeline() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(true)
+  const [events, setEvents] = useState<any[]>([])
+
+  const loadData = async () => {
+    const rawNews = await fetchLiveNews();
+    const formatted = rawNews.map((n: any) => ({
+      id: n.id,
+      type: 'news',
+      title: n.title,
+      location: n.source,
+      timestamp: n.pubDate,
+      severity: 'medium',
+      link: n.link
+    }));
+    setEvents(formatted);
+  }
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 30000); // 30s
+    return () => clearInterval(interval);
+  }, []);
 
   const checkScroll = useCallback(() => {
     const el = scrollRef.current
@@ -55,7 +82,7 @@ export default function EventTimeline() {
         window.removeEventListener('resize', checkScroll)
       }
     }
-  }, [checkScroll])
+  }, [checkScroll, events])
 
   const scroll = (direction: 'left' | 'right') => {
     const el = scrollRef.current
@@ -65,20 +92,19 @@ export default function EventTimeline() {
   }
 
   return (
-    <div className="h-36 shrink-0 bg-sentinel-surface border-t border-border flex flex-col relative">
+    <div className="h-36 shrink-0 bg-sentinel-surface border-t border-border flex flex-col relative overflow-hidden">
       {/* Timeline Header */}
-      <div className="h-8 flex items-center justify-between px-4 border-b border-border shrink-0">
+      <div className="h-8 flex items-center justify-between px-4 border-b border-border shrink-0 z-20 bg-sentinel-surface/80 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-sentinel-cyan animate-pulse-dot" />
-          <span className="text-[10px] font-mono text-sentinel-cyan tracking-[0.2em]">LIVE EVENT FEED</span>
-          <span className="text-[9px] font-mono text-muted-foreground ml-2">{globalEvents.length} EVENTS</span>
+          <span className="text-[10px] font-mono text-sentinel-cyan tracking-[0.2em]">LIVE NEWS FEED</span>
+          <span className="text-[9px] font-mono text-muted-foreground ml-2">{events.length} UPDATES</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => scroll('left')}
             disabled={!canScrollLeft}
             className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-sentinel-cyan disabled:opacity-30 transition-colors"
-            aria-label="Scroll left"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
@@ -86,7 +112,6 @@ export default function EventTimeline() {
             onClick={() => scroll('right')}
             disabled={!canScrollRight}
             className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-sentinel-cyan disabled:opacity-30 transition-colors"
-            aria-label="Scroll right"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -96,91 +121,83 @@ export default function EventTimeline() {
       {/* Scrollable Timeline */}
       <div
         ref={scrollRef}
-        className="flex-1 flex items-stretch overflow-x-auto px-4 py-2 gap-3 scrollbar-none"
+        className="flex-1 flex items-stretch overflow-x-auto px-4 py-2 gap-3 scrollbar-none relative z-10"
         style={{ scrollbarWidth: 'none' }}
       >
-        {/* Connection line */}
         <div className="absolute bottom-[52px] left-4 right-4 h-px bg-border pointer-events-none z-0" />
 
-        {globalEvents.map((event, i) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            icon={eventIcons[event.type]}
-            timeAgo={formatTimestamp(event.timestamp)}
-            index={i}
-          />
-        ))}
+        <AnimatePresence>
+          {events.map((event, i) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              icon={eventIcons[event.type]}
+              timeAgo={formatTimestamp(event.timestamp)}
+              index={i}
+            />
+          ))}
+        </AnimatePresence>
       </div>
 
-      {/* Scroll Fades */}
       {canScrollLeft && (
-        <div className="absolute left-0 top-8 bottom-0 w-8 bg-gradient-to-r from-sentinel-surface to-transparent pointer-events-none z-10" />
+        <div className="absolute left-0 top-8 bottom-0 w-8 bg-gradient-to-r from-sentinel-surface to-transparent pointer-events-none z-20" />
       )}
       {canScrollRight && (
-        <div className="absolute right-0 top-8 bottom-0 w-8 bg-gradient-to-l from-sentinel-surface to-transparent pointer-events-none z-10" />
+        <div className="absolute right-0 top-8 bottom-0 w-8 bg-gradient-to-l from-sentinel-surface to-transparent pointer-events-none z-20" />
       )}
     </div>
   )
 }
 
-function EventCard({
-  event,
-  icon,
-  timeAgo,
-  index,
-}: {
-  event: GlobalEvent
-  icon: React.ReactNode
-  timeAgo: string
-  index: number
-}) {
-  const typeConf = eventTypeConfig[event.type]
-  const sevConf = severityConfig[event.severity]
+function EventCard({ event, icon, timeAgo, index }: any) {
+  const typeConf = typeConfSafe(event.type)
+  const sevConf = sevConfSafe(event.severity)
 
   return (
-    <div
-      className="relative shrink-0 w-56 flex flex-col gap-1.5 p-2.5 rounded bg-sentinel-surface-2/60 border border-border hover:border-sentinel-cyan/30 transition-all duration-200 cursor-default group animate-fade-in-up"
-      style={{ animationDelay: `${index * 50}ms` }}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.4, ease: "easeOut", delay: index * 0.05 }}
+      className="relative shrink-0 w-64 flex flex-col gap-1.5 p-2.5 rounded bg-sentinel-surface-2/60 border border-border hover:border-sentinel-cyan/30 transition-colors duration-200 group"
+      onClick={() => event.link && window.open(event.link, '_blank')}
+      style={{ cursor: event.link ? 'pointer' : 'default' }}
     >
-      {/* Top row: type badge + severity */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span style={{ color: typeConf?.color }}>{icon}</span>
+          <span style={{ color: typeConf.color }}>{icon}</span>
           <span
-            className="text-[9px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded"
-            style={{ color: typeConf?.color, background: `${typeConf?.color}15` }}
+            className="text-[9px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded uppercase"
+            style={{ color: typeConf.color, background: `${typeConf.color}15` }}
           >
-            {typeConf?.label}
+            {typeConf.label}
           </span>
         </div>
         <span
           className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded tracking-wider"
-          style={{ color: sevConf?.color, background: sevConf?.bg }}
+          style={{ color: sevConf.color, background: sevConf.bg }}
         >
           {event.severity.toUpperCase()}
         </span>
       </div>
 
-      {/* Title */}
       <p className="text-[11px] font-mono text-foreground leading-tight line-clamp-2 group-hover:text-sentinel-cyan transition-colors">
         {event.title}
       </p>
 
-      {/* Bottom: location + time */}
-      <div className="flex items-center justify-between mt-auto">
-        <span className="text-[9px] font-mono text-muted-foreground">{event.location}</span>
-        <span className="text-[9px] font-mono text-muted-foreground/60">{timeAgo}</span>
+      <div className="flex items-center justify-between mt-auto pt-2">
+        <span className="text-[9px] font-mono text-muted-foreground truncate max-w-[120px]">{event.location}</span>
+        <span className="text-[9px] font-mono text-sentinel-cyan/80 font-bold">{timeAgo}</span>
       </div>
 
-      {/* Glowing connector dot */}
       <div
         className="absolute -bottom-[10px] left-1/2 -translate-x-1/2 w-2 h-2 rounded-full z-10"
         style={{
-          background: typeConf?.color,
-          boxShadow: `0 0 6px ${typeConf?.color}`,
+          background: typeConf.color,
+          boxShadow: `0 0 6px ${typeConf.color}`,
         }}
       />
-    </div>
+    </motion.div>
   )
 }

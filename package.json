@@ -1,0 +1,25 @@
+{
+  "name": "geo-pulse-sentinals",
+  "version": "1.0.0",
+  "description": "🌍 GEOPULSE",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shauryacoder17-tech/GEO-PULSE-SENTINALS.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/shauryacoder17-tech/GEO-PULSE-SENTINALS/issues"
+  },
+  "homepage": "https://github.com/shauryacoder17-tech/GEO-PULSE-SENTINALS#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

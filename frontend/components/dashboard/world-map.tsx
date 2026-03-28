@@ -192,48 +192,53 @@ export default function WorldMap({ onCountrySelect, selectedCountry, filters }: 
       if (!needsRedrawRef.current) return
       needsRedrawRef.current = false
 
-      const zoom = map.getZoom()
-      const bounds = map.getBounds()
-      const mapSize = map.getSize()
-      
-      // Optimize: Only set canvas dimensions if they've changed to avoid unnecessary DOM paints
-      if (canvas.width !== mapSize.x || canvas.height !== mapSize.y) {
-        canvas.width = mapSize.x
-        canvas.height = mapSize.y
+      // Guard against Leaflet not being fully ready (race condition with _leaflet_pos)
+      try {
+        const zoom = map.getZoom()
+        const bounds = map.getBounds()
+        const mapSize = map.getSize()
+        
+        // Optimize: Only set canvas dimensions if they've changed to avoid unnecessary DOM paints
+        if (canvas.width !== mapSize.x || canvas.height !== mapSize.y) {
+          canvas.width = mapSize.x
+          canvas.height = mapSize.y
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        if (!flights || flights.length === 0) return
+
+        // Viewport cull (no hard count limit)
+        const visible = flights
+          .filter(f =>
+            f.latitude > bounds.getSouth() - 2 &&
+            f.latitude < bounds.getNorth() + 2 &&
+            f.longitude > bounds.getWest() - 2 &&
+            f.longitude < bounds.getEast() + 2
+          )
+
+        // LOD: zoom < 2 → nothing
+        if (zoom < 2) return
+
+        const planeImg = planeIconRef.current!
+
+        // zoom 2+: always draw plane icons, adjust size by zoom
+        const iconSize = zoom >= 4 ? 9 : (zoom === 3 ? 7 : 5)
+        const alpha = zoom >= 4 ? 0.8 : 0.6
+
+        visible.forEach(f => {
+          const pt = map.latLngToContainerPoint([f.latitude, f.longitude])
+          const headingRad = ((f.true_track || 0) * Math.PI) / 180
+
+          ctx.save()
+          ctx.translate(pt.x, pt.y)
+          ctx.rotate(headingRad)
+          ctx.globalAlpha = alpha
+          ctx.drawImage(planeImg as any, -iconSize / 2, -iconSize / 2, iconSize, iconSize)
+          ctx.restore()
+        })
+      } catch {
+        // Map not ready yet, skip this frame
       }
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      if (!flights || flights.length === 0) return
-
-      // Viewport cull (no hard count limit)
-      const visible = flights
-        .filter(f =>
-          f.latitude > bounds.getSouth() - 2 &&
-          f.latitude < bounds.getNorth() + 2 &&
-          f.longitude > bounds.getWest() - 2 &&
-          f.longitude < bounds.getEast() + 2
-        )
-
-      // LOD: zoom < 2 → nothing
-      if (zoom < 2) return
-
-      const planeImg = planeIconRef.current!
-
-      // zoom 2+: always draw plane icons, adjust size by zoom
-      const iconSize = zoom >= 4 ? 9 : (zoom === 3 ? 7 : 5)
-      const alpha = zoom >= 4 ? 0.8 : 0.6
-
-      visible.forEach(f => {
-        const pt = map.latLngToContainerPoint([f.latitude, f.longitude])
-        const headingRad = ((f.true_track || 0) * Math.PI) / 180
-
-        ctx.save()
-        ctx.translate(pt.x, pt.y)
-        ctx.rotate(headingRad)
-        ctx.globalAlpha = alpha
-        ctx.drawImage(planeImg as any, -iconSize / 2, -iconSize / 2, iconSize, iconSize)
-        ctx.restore()
-      })
     }
 
     render()
@@ -287,11 +292,23 @@ export default function WorldMap({ onCountrySelect, selectedCountry, filters }: 
   }, [showTooltip, hideTooltip])
 
   const initMap = useCallback(async () => {
-    if (!mapRef.current || leafletMapRef.current) return
+    if (!mapRef.current) return
 
     const L = (await import('leaflet')).default
     // @ts-ignore - TS doesn't type generic CSS imports out of the box
     await import('leaflet/dist/leaflet.css')
+
+    // Prevent "Map container is already initialized" on HMR / React strict mode
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove()
+      leafletMapRef.current = null
+    }
+    // Also clear any stale Leaflet state on the DOM node itself
+    const container = mapRef.current as any
+    if (container._leaflet_id) {
+      container._leaflet_id = null
+      container.innerHTML = ''
+    }
 
     const map = L.map(mapRef.current, {
       center: [20, 15],
@@ -407,7 +424,13 @@ export default function WorldMap({ onCountrySelect, selectedCountry, filters }: 
     }
   }, [startRenderLoop, setupCanvasHover])
 
-  useEffect(() => { initMap() }, [initMap])
+  useEffect(() => {
+    let cleanup: (() => void) | undefined
+    initMap().then(fn => { cleanup = fn })
+    return () => {
+      if (cleanup) cleanup()
+    }
+  }, [initMap])
 
   // Country & Event markers
   useEffect(() => {

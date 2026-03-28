@@ -12,12 +12,27 @@ let newsCache = { data: null as any, lastFetch: 0 };
 let marketCache = { data: null as any, lastFetch: 0 };
 
 router.get('/news', async (req, res) => {
-  const now = Date.now();
-  if (!newsCache.data || now - newsCache.lastFetch > 60000) { // 1 min cache
-    newsCache.data = await fetchLiveNews();
-    newsCache.lastFetch = now;
+  try {
+    const now = Date.now();
+    if (!newsCache.data || newsCache.data.length === 0 || now - newsCache.lastFetch > 60000) { // 1 min cache
+      // Race the fetch against a 15-second timeout
+      const fetchPromise = fetchLiveNews();
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('News fetch timeout')), 15000)
+      );
+      try {
+        newsCache.data = await Promise.race([fetchPromise, timeoutPromise]);
+      } catch (timeoutErr) {
+        console.warn('News fetch timed out, using cached data or empty');
+        if (!newsCache.data) newsCache.data = [];
+      }
+      newsCache.lastFetch = now;
+    }
+    res.json({ news: newsCache.data });
+  } catch (err) {
+    console.error('News route error:', err);
+    res.json({ news: [] });
   }
-  res.json({ news: newsCache.data });
 });
 
 router.get('/market', async (req, res) => {
